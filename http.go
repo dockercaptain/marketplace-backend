@@ -50,12 +50,19 @@ type ErrorResponse struct {
 	StatusCode string
 }
 
+type SuccessResponse struct {
+	Message    string
+	StatusCode string
+	Status     string
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /marketplace/apps", GetApplications)
 	mux.HandleFunc("GET /marketplace/apps/versions/{id}", GetApplicationVersions)
 	mux.HandleFunc("GET /marketplace/apps/envs", GetEnvironments)
 	mux.HandleFunc("GET /marketplace/apps/{appName}", GetAllAppsDetailsByName)
+	mux.HandleFunc("POST /marketplace/apps/{appName}/create", CreateAppBasics)
 	http.ListenAndServe(":8080", mux)
 	fmt.Println("localhost:8080...")
 }
@@ -129,10 +136,35 @@ func GetAllAppsDetailsByName(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func CreateAppBasics(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	appName := r.PathValue("appName")
+	if appName == "postgres" {
+		var pgApp PostgresApp
+		// convert json to golang struct and map to struct reference
+		err := json.NewDecoder(r.Body).Decode(&pgApp)
+		if err != nil {
+			errorResponse := &ErrorResponse{
+				Message:    "Please pass valid input",
+				StatusCode: "400",
+			}
+			json.NewEncoder(w).Encode(errorResponse)
+		} else {
+			// save the record and return response
+			success, err := CreateApplicationPostgres(pgApp)
+			if err != nil {
+				json.NewEncoder(w).Encode(err)
+			} else {
+				json.NewEncoder(w).Encode(success)
+			}
+		}
+	}
+}
 func GetApplicationVersionsFromID(id int) (map[string]string, *ErrorResponse) {
 	conn, err := GetPostgresConnection()
 	if err != nil {
 		fmt.Println(err)
+		return nil, &ErrorResponse{Message: "Something went wrong, please try again later", StatusCode: "500"}
 	}
 	defer conn.Close(context.Background())
 	if conn != nil {
@@ -143,6 +175,26 @@ func GetApplicationVersionsFromID(id int) (map[string]string, *ErrorResponse) {
 		}
 		//fmt.Println("\n\n", versions)
 		return versions, nil
+	} else {
+		return nil, &ErrorResponse{
+			Message:    "Something went wrong, please try after sometime",
+			StatusCode: "500",
+		}
+	}
+}
+func CreateApplicationPostgres(pgApp PostgresApp) (*SuccessResponse, *ErrorResponse) {
+	conn, err := GetPostgresConnection()
+	if err != nil {
+		fmt.Println(err)
+		return nil, &ErrorResponse{Message: "Something went wrong, please try again later", StatusCode: "500"}
+	}
+	defer conn.Close(context.Background())
+	if conn != nil {
+		insertQuery := `INSERT INTO public.installed_postgres_details(
+			status, description, "serverName", "adminUser", password, version, environment, "sizeDisk", "storageType", "sizeCPU", "sizeMemory")
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`
+		conn.Query(context.Background(), insertQuery, pgApp.Status, pgApp.Description, pgApp.ServerName, pgApp.AdminUser, pgApp.Password, pgApp.Version, pgApp.Environment, pgApp.SizeDisk, pgApp.StorageType, pgApp.SizeCPU, pgApp.SizeMemory)
+		return &SuccessResponse{Message: "Data saved successfully", StatusCode: "201", Status: "SUCCESS"}, nil
 	} else {
 		return nil, &ErrorResponse{
 			Message:    "Something went wrong, please try after sometime",
