@@ -60,6 +60,10 @@ func main() {
 	http.ListenAndServe(":8080", mux)
 
 }
+// enable cors
+func enableCors(w *http.ResponseWriter) {
+(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
 
 // 1.
 func GetApplications(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +76,7 @@ func GetApplications(w http.ResponseWriter, r *http.Request) {
 
 // 1.
 func GetApplicationVersions(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	id := r.PathValue("id")
 	fmt.Println(id)
 	i, _ := strconv.Atoi(id)
@@ -181,6 +186,7 @@ func GetEnvironmentsFromDB() ([]Environment, *ErrorResponse) {
 }
 
 func GetEnvironments(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	// Dynamically access the path variable
 	//fmt.Fprintf(w, "Retrieving item with ID: %s", item)
 	environments, err := GetEnvironmentsFromDB()
@@ -192,6 +198,7 @@ func GetEnvironments(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetAllAppsDetailsByName(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	appName := r.PathValue("appName")
 	var postgresList []PostgresApp
 	if appName == "postgres" {
