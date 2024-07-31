@@ -184,23 +184,28 @@ func GetApplicationVersionsFromID(id int) (map[string]string, *ErrorResponse) {
 }
 func CreateApplicationPostgres(pgApp PostgresApp) (*SuccessResponse, *ErrorResponse) {
 	conn, err := GetPostgresConnection()
+	tx, err := conn.Begin(context.Background())
+	errResponse := &ErrorResponse{Message: "Something went wrong, please try again later", StatusCode: "500"}
 	if err != nil {
 		fmt.Println(err)
-		return nil, &ErrorResponse{Message: "Something went wrong, please try again later", StatusCode: "500"}
+		return nil, errResponse
 	}
-	defer conn.Close(context.Background())
-	if conn != nil {
-		insertQuery := `INSERT INTO public.installed_postgres_details(
+	defer tx.Rollback(context.Background())
+
+	insertQuery := `INSERT INTO public.installed_postgres_details(
 			status, description, "serverName", "adminUser", password, version, environment, "sizeDisk", "storageType", "sizeCPU", "sizeMemory")
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`
-		conn.Query(context.Background(), insertQuery, pgApp.Status, pgApp.Description, pgApp.ServerName, pgApp.AdminUser, pgApp.Password, pgApp.Version, pgApp.Environment, pgApp.SizeDisk, pgApp.StorageType, pgApp.SizeCPU, pgApp.SizeMemory)
-		return &SuccessResponse{Message: "Data saved successfully", StatusCode: "201", Status: "SUCCESS"}, nil
-	} else {
-		return nil, &ErrorResponse{
-			Message:    "Something went wrong, please try after sometime",
-			StatusCode: "500",
-		}
+	result, err := tx.Exec(context.Background(), insertQuery, pgApp.Status, pgApp.Description, pgApp.ServerName, pgApp.AdminUser, pgApp.Password, pgApp.Version, pgApp.Environment, pgApp.SizeDisk, pgApp.StorageType, pgApp.SizeCPU, pgApp.SizeMemory)
+	if err != nil {
+		return nil, errResponse
 	}
+	fmt.Println(result)
+	err = tx.Commit(context.Background())
+	if err != nil {
+		return nil, errResponse
+	}
+	return &SuccessResponse{Message: "Data saved successfully", StatusCode: "201", Status: "SUCCESS"}, nil
+
 }
 
 func BuildResponseForVersions(versionsMap map[string]string) []string {
