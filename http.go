@@ -134,6 +134,7 @@ func GetApplicationVersionsFromID(id int) (map[string]string, *ErrorResponse) {
 	if err != nil {
 		fmt.Println(err)
 	}
+	defer conn.Close(context.Background())
 	if conn != nil {
 		var versions map[string]string
 		err = conn.QueryRow(context.Background(), `select versions from "applicationDetails" where id = $1`, id).Scan(&versions)
@@ -250,7 +251,6 @@ func GetAllPostgresFromDB() ([]PostgresApp, *ErrorResponse) {
 	}
 	defer conn.Close(context.Background())
 	if conn != nil {
-		defer conn.Close(context.Background())
 		var postgresList []PostgresApp
 		rows, err := conn.Query(context.Background(), `select * from installed_postgres_details`)
 		if err != nil {
