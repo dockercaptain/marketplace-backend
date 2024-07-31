@@ -53,24 +53,30 @@ type ErrorResponse struct {
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /marketplace/apps", GetApplications)
-	fmt.Println("localhost:8080...")
 	mux.HandleFunc("GET /marketplace/apps/versions/{id}", GetApplicationVersions)
 	mux.HandleFunc("GET /marketplace/apps/envs", GetEnvironments)
 	mux.HandleFunc("GET /marketplace/apps/{appName}", GetAllAppsDetailsByName)
 	http.ListenAndServe(":8080", mux)
-
+	fmt.Println("localhost:8080...")
 }
+
 // enable cors
 func enableCors(w *http.ResponseWriter) {
-(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 }
 
 // 1.
 func GetApplications(w http.ResponseWriter, r *http.Request) {
+	// enable cors
+	enableCors(&w)
 	// Dynamically access the path variable
 	//fmt.Fprintf(w, "Retrieving item with ID: %s", item)
-	applications := GetApplicationsFromDB()
-	json.NewEncoder(w).Encode(applications)
+	applications, err := GetApplicationsFromDB()
+	if err != nil {
+		json.NewEncoder(w).Encode(err)
+	} else {
+		json.NewEncoder(w).Encode(applications)
+	}
 
 }
 
@@ -80,31 +86,68 @@ func GetApplicationVersions(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	fmt.Println(id)
 	i, _ := strconv.Atoi(id)
-	versions := GetApplicationVersionsFromID(i)
+	versions, err := GetApplicationVersionsFromID(i)
 	appVersions := BuildResponseForVersions(versions)
-	//fmt.Println(appVersions)
 	res := AppVersionsResponse{
 		Status:      "Success",
 		AppVersions: appVersions,
 	}
-	fmt.Println(res)
+	if err != nil {
+		res = AppVersionsResponse{
+			Status:      "Failure",
+			AppVersions: nil,
+		}
+	}
 	json.NewEncoder(w).Encode(res)
 
 }
 
-func GetApplicationVersionsFromID(id int) map[string]string {
+func GetEnvironments(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	// Dynamically access the path variable
+	//fmt.Fprintf(w, "Retrieving item with ID: %s", item)
+	environments, err := GetEnvironmentsFromDB()
+	if err != nil {
+		json.NewEncoder(w).Encode(err)
+	} else {
+		json.NewEncoder(w).Encode(environments)
+	}
+}
+
+func GetAllAppsDetailsByName(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
+	appName := r.PathValue("appName")
+	var postgresList []PostgresApp
+	var err *ErrorResponse
+	if appName == "postgres" {
+		postgresList, err = GetAllPostgresFromDB()
+	}
+	if err != nil {
+		json.NewEncoder(w).Encode(err)
+	} else {
+		json.NewEncoder(w).Encode(postgresList)
+	}
+}
+
+func GetApplicationVersionsFromID(id int) (map[string]string, *ErrorResponse) {
 	conn, err := GetPostgresConnection()
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	var versions map[string]string
-	err = conn.QueryRow(context.Background(), `select versions from "applicationDetails" where id = $1`, id).Scan(&versions)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+	if conn != nil {
+		var versions map[string]string
+		err = conn.QueryRow(context.Background(), `select versions from "applicationDetails" where id = $1`, id).Scan(&versions)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
+		}
+		//fmt.Println("\n\n", versions)
+		return versions, nil
+	} else {
+		return nil, &ErrorResponse{
+			Message:    "Something went wrong, please try after sometime",
+			StatusCode: "500",
+		}
 	}
-	//fmt.Println("\n\n", versions)
-	return versions
 }
 
 func BuildResponseForVersions(versionsMap map[string]string) []string {
@@ -116,41 +159,53 @@ func BuildResponseForVersions(versionsMap map[string]string) []string {
 }
 
 // 2.
-func GetApplicationsFromDB() []Applications {
+func GetApplicationsFromDB() ([]Applications, *ErrorResponse) {
 	conn, err := GetPostgresConnection()
 	if err != nil {
 		fmt.Println(err)
+		return nil, &ErrorResponse{
+			Message:    "Something went wrong, please try after sometime",
+			StatusCode: "500",
+		}
 	}
-
-	var apps []Applications
-	rows, err := conn.Query(context.Background(), `select "appName",id,description,"imageName" from "applicationDetails"`)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var appName string
-		var id int32
-		var description string
-		var imageName string
-		err = rows.Scan(&appName, &id, &description, &imageName)
+	defer conn.Close(context.Background())
+	if conn != nil {
+		var apps []Applications
+		rows, err := conn.Query(context.Background(), `select "appName",id,description,"imageName" from "applicationDetails"`)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		}
-		app := Applications{
-			AppName:     appName,
-			Id:          id,
-			Description: description,
-			ImageName:   imageName,
+		defer rows.Close()
+
+		for rows.Next() {
+			var appName string
+			var id int32
+			var description string
+			var imageName string
+			err = rows.Scan(&appName, &id, &description, &imageName)
+			if err != nil {
+				fmt.Println(err)
+			}
+			app := Applications{
+				AppName:     appName,
+				Id:          id,
+				Description: description,
+				ImageName:   imageName,
+			}
+			apps = append(apps, app)
 		}
-		apps = append(apps, app)
+		return apps, nil
+	} else {
+		return nil, &ErrorResponse{
+			Message:    "Something went wrong, please try after sometime",
+			StatusCode: "500",
+		}
 	}
-	return apps
 }
 
 func GetEnvironmentsFromDB() ([]Environment, *ErrorResponse) {
 	conn, _ := GetPostgresConnection()
+	defer conn.Close(context.Background())
 	if conn != nil {
 		var envs []Environment
 		rows, err := conn.Query(context.Background(), `select id, name, description from environment_details`)
@@ -185,30 +240,15 @@ func GetEnvironmentsFromDB() ([]Environment, *ErrorResponse) {
 	}
 }
 
-func GetEnvironments(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	// Dynamically access the path variable
-	//fmt.Fprintf(w, "Retrieving item with ID: %s", item)
-	environments, err := GetEnvironmentsFromDB()
-	if err != nil {
-		json.NewEncoder(w).Encode(err)
-	} else {
-		json.NewEncoder(w).Encode(environments)
-	}
-}
-
-func GetAllAppsDetailsByName(w http.ResponseWriter, r *http.Request) {
-	enableCors(&w)
-	appName := r.PathValue("appName")
-	var postgresList []PostgresApp
-	if appName == "postgres" {
-		postgresList = GetAllPostgresFromDB()
-	}
-	json.NewEncoder(w).Encode(postgresList)
-}
-
-func GetAllPostgresFromDB() ([]PostgresApp, ErrorResponse) {
+func GetAllPostgresFromDB() ([]PostgresApp, *ErrorResponse) {
 	conn, err := GetPostgresConnection()
+	if err != nil {
+		return nil, &ErrorResponse{
+			Message:    "Something went wrong, please try after sometime",
+			StatusCode: "500",
+		}
+	}
+	defer conn.Close(context.Background())
 	if conn != nil {
 		defer conn.Close(context.Background())
 		var postgresList []PostgresApp
@@ -245,7 +285,10 @@ func GetAllPostgresFromDB() ([]PostgresApp, ErrorResponse) {
 		}
 		return postgresList, nil
 	} else {
-
+		return nil, &ErrorResponse{
+			Message:    "Something went wrong, please try after sometime",
+			StatusCode: "500",
+		}
 	}
 }
 
