@@ -13,6 +13,7 @@ type PostgresApp struct {
 	StorageType string
 	SizeCPU     string
 	SizeMemory  string
+	Issues      string
 }
 
 type ErrorResponse struct {
