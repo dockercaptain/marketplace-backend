@@ -19,9 +19,9 @@ func CreateApplicationPostgres(pgApp pgStruct.PostgresApp) (*pgStruct.SuccessRes
 	defer tx.Rollback(context.Background())
 
 	insertQuery := `INSERT INTO public.installed_postgres_details(
-			status, description, "serverName", "adminUser", password, version, environment, "sizeDisk", "storageType", "sizeCPU", "sizeMemory")
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`
-	_, err = tx.Exec(context.Background(), insertQuery, pgApp.Status, pgApp.Description, pgApp.ServerName, pgApp.AdminUser, pgApp.Password, pgApp.Version, pgApp.Environment, pgApp.SizeDisk, pgApp.StorageType, pgApp.SizeCPU, pgApp.SizeMemory)
+			status, description, "serverName", "adminUser", password, version, environment, "sizeDisk", "storageType", "sizeCPU", "sizeMemory", "issues")
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`
+	_, err = tx.Exec(context.Background(), insertQuery, pgApp.Status, pgApp.Description, pgApp.ServerName, pgApp.AdminUser, pgApp.Password, pgApp.Version, pgApp.Environment, pgApp.SizeDisk, pgApp.StorageType, pgApp.SizeCPU, pgApp.SizeMemory, pgApp.Issues)
 	if err != nil {
 		fmt.Println(err)
 		return nil, errResponse
@@ -53,7 +53,8 @@ func GetApplicationPostgresById(pgId int) (*pgStruct.PostgresApp, *pgStruct.Erro
 	var storageType string
 	var sizeCPU string
 	var sizeMemory string
-	err := conn.QueryRow(context.Background(), selectQuery, pgId).Scan(&id, &status, &description, &serverName, &adminUser, &password, &version, &environment, &sizeDisk, &storageType, &sizeCPU, &sizeMemory)
+	var issues string
+	err := conn.QueryRow(context.Background(), selectQuery, pgId).Scan(&id, &status, &description, &serverName, &adminUser, &password, &version, &environment, &sizeDisk, &storageType, &sizeCPU, &sizeMemory, &issues)
 	if err != nil {
 		errResponse.StatusCode = "404"
 		errResponse.Message = `Postgres app doesn't exist for id`
@@ -72,6 +73,7 @@ func GetApplicationPostgresById(pgId int) (*pgStruct.PostgresApp, *pgStruct.Erro
 		StorageType: storageType,
 		SizeCPU:     sizeCPU,
 		SizeMemory:  sizeMemory,
+		Issues: issues,
 	}
 	return pgApp, nil
 }
@@ -106,7 +108,8 @@ func GetAllPostgresFromDB() ([]pgStruct.PostgresApp, *pgStruct.ErrorResponse) {
 			var storageType string
 			var sizeCPU string
 			var sizeMemory string
-			err = rows.Scan(&id, &status, &description, &serverName, &adminUser, &password, &version, &environment, &sizeDisk, &storageType, &sizeCPU, &sizeMemory)
+			var issues string
+			err = rows.Scan(&id, &status, &description, &serverName, &adminUser, &password, &version, &environment, &sizeDisk, &storageType, &sizeCPU, &sizeMemory, &issues)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -123,6 +126,7 @@ func GetAllPostgresFromDB() ([]pgStruct.PostgresApp, *pgStruct.ErrorResponse) {
 				StorageType: storageType,
 				SizeCPU:     sizeCPU,
 				SizeMemory:  sizeMemory,
+				Issues: issues,
 			}
 			postgresList = append(postgresList, postgres)
 		}
