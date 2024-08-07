@@ -58,3 +58,7 @@ func GetEnvironments(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(environments)
 	}
 }
+
+func AppHelmUpgrade(w http.ResponseWriter, r *http.Request) {
+
+}
