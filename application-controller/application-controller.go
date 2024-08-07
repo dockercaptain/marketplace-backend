@@ -60,5 +60,12 @@ func GetEnvironments(w http.ResponseWriter, r *http.Request) {
 }
 
 func AppHelmUpgrade(w http.ResponseWriter, r *http.Request) {
-
+	release, err := helmservice.InstallAndUpgrade()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(err)
+	} else {
+		json.NewEncoder(w).Encode(release)
+	}
 }
+
