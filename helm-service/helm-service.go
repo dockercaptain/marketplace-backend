@@ -21,7 +21,10 @@ import (
 var chartRepo = repo.Entry{
 	Name: "bitnami",
 	//URL:  "https://charts.helm.sh/stable",
-	URL: "https://charts.bitnami.com/bitnami",
+	//URL: "https://charts.bitnami.com/bitnami",
+	URL:      "https://github.com/dockercaptain/marketplace-helm",
+	Username: "dockercaptain",
+	Password: "",
 }
 
 func InstallAndUpgrade() (*release.Release, *pgStruct.ErrorResponse) {
@@ -73,7 +76,7 @@ func InstallAndUpgrade() (*release.Release, *pgStruct.ErrorResponse) {
 
 	chartSpec := helmclient.ChartSpec{
 		ReleaseName:     "postgresql",
-		ChartName:       "bitnami/postgresql",
+		ChartName:       "marketplace-helm/postgresql-ha",
 		Namespace:       "test-del-ns",
 		UpgradeCRDs:     true,
 		Wait:            true,
