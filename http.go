@@ -16,5 +16,6 @@ func main() {
 	mux.HandleFunc("GET /marketplace/apps/{appName}", pgController.GetAllAppsDetailsByName)
 	mux.HandleFunc("POST /marketplace/apps/{appName}/create", pgController.CreateAppBasics)
 	mux.HandleFunc("GET /marketplace/apps/{appName}/{id}", pgController.GetApplicationById)
+	mux.HandleFunc("POST /marketplace/apps/{appName}/helmUpgrade", appController.AppHelmUpgrade)
 	http.ListenAndServe(":8080", mux)
 }
