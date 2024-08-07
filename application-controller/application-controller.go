@@ -60,6 +60,7 @@ func GetEnvironments(w http.ResponseWriter, r *http.Request) {
 }
 
 func AppHelmUpgrade(w http.ResponseWriter, r *http.Request) {
+	utility.EnableCors(&w)
 	release, err := helmservice.InstallAndUpgrade()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
