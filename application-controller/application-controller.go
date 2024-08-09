@@ -2,6 +2,7 @@ package applicationcontroller
 
 import (
 	"encoding/json"
+	"fmt"
 	repositorty "marketplace-api/application-repository"
 	appStruct "marketplace-api/application-struct"
 	helmservice "marketplace-api/helm-service"
@@ -26,6 +27,7 @@ func GetApplications(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// 1.
 func GetApplicationVersions(w http.ResponseWriter, r *http.Request) {
 	utility.EnableCors(&w)
 	id := r.PathValue("id")
@@ -71,3 +73,15 @@ func AppHelmUpgrade(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func GetAppRelease(w http.ResponseWriter, r *http.Request) {
+	utility.EnableCors(&w)
+	name := r.PathValue("appName")
+	fmt.Println("name is: " + name)
+	release, err := helmservice.GetRelease(name)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(err)
+	} else {
+		json.NewEncoder(w).Encode(release)
+	}
+}
