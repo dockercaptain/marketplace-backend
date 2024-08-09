@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pgStruct "marketplace-api/postgre-struct"
+	"marketplace-api/utility"
 
 	helmclient "github.com/mittwald/go-helm-client"
 	"github.com/mittwald/go-helm-client/values"
@@ -19,12 +20,50 @@ import (
 )
 
 var chartRepo = repo.Entry{
-	Name: "bitnami",
+	Name: "marketplace-helm",
 	//URL:  "https://charts.helm.sh/stable",
-	//URL: "https://charts.bitnami.com/bitnami",
-	URL:      "https://github.com/dockercaptain/marketplace-helm",
-	Username: "dockercaptain",
-	Password: "",
+	// URL: "https://charts.bitnami.com/bitnami",
+	//URL: "https://github.com/dockercaptain/",
+	// Username: "dockercaptain",
+	// Password: "",
+	URL: "https://dockercaptain.github.io/marketplace-helm/",
+}
+
+func getkubeconfigListByte() ([]byte, *pgStruct.ErrorResponse) {
+	//  read kubeconfig file from golang io operation:-
+	file, err := os.Open("localconfig.kubeconfig")
+	if err != nil {
+		errRes := utility.GetErrorResponse(err, "500")
+		return nil, errRes
+	}
+	defer file.Close()
+	stat, err := file.Stat()
+	if err != nil {
+		errRes := utility.GetErrorResponse(err, "500")
+		return nil, errRes
+	}
+	kubeconfigListByte := make([]byte, stat.Size())
+	return kubeconfigListByte, nil
+}
+func getKubeOption() (*helmclient.KubeConfClientOptions, *pgStruct.ErrorResponse) {
+	kubeconfigListByte, err := getkubeconfigListByte()
+	if err != nil {
+		return nil, err
+	}
+	return &helmclient.KubeConfClientOptions{
+		Options: &helmclient.Options{
+			Namespace:        "test-del-ns", // Change this to the namespace you wish to install the chart in.
+			RepositoryCache:  "/tmp/.helmcache",
+			RepositoryConfig: "/tmp/.helmrepo",
+			Debug:            true,
+			Linting:          true, // Change this to false if you don't want linting.
+			DebugLog: func(format string, v ...interface{}) {
+				// Change this to your own logger. Default is 'log.Printf(format, v...)'.
+			},
+		},
+		KubeContext: "",
+		KubeConfig:  kubeconfigListByte,
+	}, nil
 }
 
 func InstallAndUpgrade() (*release.Release, *pgStruct.ErrorResponse) {
@@ -73,7 +112,11 @@ func InstallAndUpgrade() (*release.Release, *pgStruct.ErrorResponse) {
 			StatusCode: "500",
 		}
 	}
-
+	fmt.Println("Add or update chart")
+	// `primary.resources.requests={"memory": "200Mi"}`,
+	//`primary.resources.requests={"cpu": "100m"}`,
+	// above request should be constant and limit to be
+	// provided by user
 	chartSpec := helmclient.ChartSpec{
 		ReleaseName:     "postgresql",
 		ChartName:       "marketplace-helm/postgresql-ha",
@@ -81,12 +124,15 @@ func InstallAndUpgrade() (*release.Release, *pgStruct.ErrorResponse) {
 		UpgradeCRDs:     true,
 		Wait:            true,
 		Timeout:         300 * time.Second,
-		Version:         "15.2.6",
+		Version:         "11.9.4",
 		CreateNamespace: true,
-		DryRun:          true,
+		DryRun:          false,
 		ValuesOptions: values.Options{JSONValues: []string{
-			`primary.persistence={"size":"11Gi"}`,
+			`persistence={"size":"3Gi"}`,
 			`global.postgresql.auth={"postgresPassword":"NewPassword1"}`,
+			`global={"defaultStorageClass":"azurefile"}`,
+			`postgresql.resources={"limits":{"memory": "1000Mi", "cpu": "200m"},"requests":{"memory": "200Mi", "cpu": "100m"}}`,
+			`postgresql.nodeSelector={}`,
 		},
 		},
 	}
@@ -123,13 +169,23 @@ func GetChart(genericHelmClient helmclient.Client) {
 	fmt.Println(str)
 }
 
-func GetRelease(genericHelmClient helmclient.Client, kubeOption *helmclient.KubeConfClientOptions) {
-	kubefileHelmClient, _ := helmclient.NewClientFromKubeConf(kubeOption, helmclient.Burst(1000), helmclient.Timeout(1000*time.Second))
-	release, err := helmclient.Client.GetRelease(kubefileHelmClient, "postgresql")
+func GetRelease(name string) (*release.Release, *pgStruct.ErrorResponse) {
+	kubeOption, err := getKubeOption()
 	if err != nil {
-		log.Println("unable to get the release", err)
+		return nil, err
 	}
-	fmt.Println(release.Name, release.Namespace, release.Info.Status, release.Chart.Name(), release.Chart.AppVersion(), release.Info.LastDeployed.String())
+	kubefileHelmClient, error := helmclient.NewClientFromKubeConf(kubeOption, helmclient.Burst(1000), helmclient.Timeout(1000*time.Second))
+	if error != nil {
+		errRes := utility.GetErrorResponse(error, "500")
+		return nil, errRes
+	}
+	release, error := helmclient.Client.GetRelease(kubefileHelmClient, name)
+	if error != nil {
+		errRes := utility.GetErrorResponse(error, "500")
+		return nil, errRes
+	}
+	//	fmt.Println(release.Name, release.Namespace, release.Info.Status, release.Chart.Name(), release.Chart.AppVersion(), release.Info.LastDeployed.String())
+	return release, nil
 }
 
 func UninstallReleaseByName(name string, kubeOption *helmclient.KubeConfClientOptions) {
