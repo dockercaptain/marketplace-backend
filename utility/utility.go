@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	pgStruct "marketplace-api/postgre-struct"
 	"net/http"
 	"os"
 
@@ -32,4 +33,11 @@ func BuildResponseForVersions(versionsMap map[string]string) []string {
 		appVersions = append(appVersions, j)
 	}
 	return appVersions
+}
+
+func GetErrorResponse(err error, statusCode string) *pgStruct.ErrorResponse {
+	return &pgStruct.ErrorResponse{
+		Message:    err.Error(),
+		StatusCode: statusCode,
+	}
 }
